@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  foundryvtt:
+    image: ghcr.io/felddy/foundryvtt:14
+    container_name: foundryvtt
+    restart: unless-stopped
+    environment:
+      # Variables populated from .env file or here if needed for startup configuration
+      FOUNDRY_USERNAME: ${FOUNDRY_USERNAME}
+      FOUNDRY_PASSWORD: ${FOUNDRY_PASSWORD}
+    ports:
+      # Expose Foundry VTT's internal port to the host machine. 
+      # NOTE: Cloudflare Tunnel manages external access, but this is useful for local debugging.
+      - "30000:30000/tcp"
+    volumes:
+      # Bind mount data directory from host (${DATA_DIR}) to container /data
+      - type: bind
+        source: ${DATA_DIR}
+        target: /data
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    # The tunnel needs access to network resources.
+    command: tunnel --no-autoupdate run
+    environment:
+      # Pass necessary secrets or identifiers for Cloudflare connection.
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    volumes:
+      # Mount the necessary configuration files for cloudflared to connect to your tunnel endpoint.
+      - ./cloudflare/config:/etc/cloudflared

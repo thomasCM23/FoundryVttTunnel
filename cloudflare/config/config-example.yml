@@ -1,0 +1,8 @@
+tunnel: "<TUNNEL_ID>"
+
+ingress:
+  - hostname: "<YOUR_DOMAIN>"
+    service: http://foundryvtt:30000
+    originRequest:
+      originRequestHeaders: ["Host"] 
+  - service: http_status:404

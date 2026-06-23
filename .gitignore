@@ -1,0 +1,10 @@
+
+.env
+foundryData/Config
+foundryData/Data
+foundryData/Logs
+foundryData/Modules
+foundryData/Packages
+foundryData/Scripts
+foundryData/container_cache
+cloudflare/config/config.yml
