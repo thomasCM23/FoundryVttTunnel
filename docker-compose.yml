@@ -1,32 +1,58 @@
-version: '3.8'
+name: foundrysetup
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   foundryvtt:
     image: ghcr.io/felddy/foundryvtt:14
     container_name: foundryvtt
+    # Foundry signs its license against the hostname. Without a fixed hostname
+    # Docker assigns a random one each time the container is recreated, and the
+    # license/EULA has to be accepted again.
+    hostname: foundryvtt
     restart: unless-stopped
+    # Give Foundry time to flush world data to disk on shutdown.
+    stop_grace_period: 30s
     environment:
-      # Variables populated from .env file or here if needed for startup configuration
-      FOUNDRY_USERNAME: ${FOUNDRY_USERNAME}
-      FOUNDRY_PASSWORD: ${FOUNDRY_PASSWORD}
+      FOUNDRY_USERNAME: ${FOUNDRY_USERNAME:?set FOUNDRY_USERNAME in .env}
+      FOUNDRY_PASSWORD: ${FOUNDRY_PASSWORD:?set FOUNDRY_PASSWORD in .env}
+      # Keep options.json and admin.txt between restarts so settings changed in
+      # Foundry's "Application Configuration" screen are not overwritten.
+      # The FOUNDRY_* settings below only seed those files on first start; to
+      # re-apply them, delete Config/options.json (and Config/admin.txt).
+      CONTAINER_PRESERVE_CONFIG: "true"
+      # Password for the Foundry setup screen. Strongly recommended when exposed publicly.
+      FOUNDRY_ADMIN_KEY: ${FOUNDRY_ADMIN_KEY:-}
+      # Public address served by the Cloudflare tunnel (HTTPS on 443), so invite links are correct.
+      FOUNDRY_HOSTNAME: ${FOUNDRY_HOSTNAME:?set FOUNDRY_HOSTNAME in .env}
+      FOUNDRY_PROXY_SSL: "true"
+      FOUNDRY_PROXY_PORT: "443"
+      # Share anonymous usage data with Foundry (true/false). Unset = ask once in the UI.
+      FOUNDRY_TELEMETRY: ${FOUNDRY_TELEMETRY:-}
+      CONTAINER_CACHE: /data/container_cache
+      TIMEZONE: ${TIMEZONE:-UTC}
     ports:
-      # Expose Foundry VTT's internal port to the host machine. 
-      # NOTE: Cloudflare Tunnel manages external access, but this is useful for local debugging.
-      - "30000:30000/tcp"
+      # Used by the tunnel if its dashboard route points at the host IP, and for LAN access.
+      - "${FOUNDRY_PORT:-30000}:30000/tcp"
     volumes:
-      # Bind mount data directory from host (${DATA_DIR}) to container /data
       - type: bind
-        source: ${DATA_DIR}
+        source: ${DATA_DIR:-./foundryData}
         target: /data
+    logging: *default-logging
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
-    # The tunnel needs access to network resources.
+    # Token mode: hostname -> service routes are managed in the Cloudflare dashboard.
     command: tunnel --no-autoupdate run
     environment:
-      # Pass necessary secrets or identifiers for Cloudflare connection.
-      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
-    volumes:
-      # Mount the necessary configuration files for cloudflared to connect to your tunnel endpoint.
-      - ./cloudflare/config:/etc/cloudflared
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:?set CF_TUNNEL_TOKEN in .env}
+    depends_on:
+      foundryvtt:
+        condition: service_healthy
+    logging: *default-logging
